@@ -141,6 +141,25 @@ def setup_database() -> None:
             else:
                 raise
 
+        # Create application user for the ML service
+        app_username = os.environ.get('MONGO_USERNAME', 'finance_user')
+        app_password = os.environ.get('MONGO_PASSWORD', 'FinanceUserPass2024!')
+        
+        try:
+            admin_db = client.admin
+            admin_db.command("createUser",
+                           app_username,
+                           pwd=app_password,
+                           roles=[
+                               {"role": "readWrite", "db": "finance_data"},
+                               {"role": "dbAdmin", "db": "finance_data"}
+                           ])
+            logger.info(f"Created {app_username} with readWrite access to finance_data")
+        except errors.DuplicateKeyError:
+            logger.info(f"{app_username} already exists")
+        except Exception as e:
+            logger.warning(f"Could not create {app_username}: {str(e)}")
+
         client.close()
         logger.info("=== DATABASE SETUP COMPLETED SUCCESSFULLY ===")
     except Exception as e:

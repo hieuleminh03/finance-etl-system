@@ -49,8 +49,8 @@ class Config:
     MONGO_HOST = os.getenv('MONGO_HOST', 'mongodb')
     MONGO_PORT = int(os.getenv('MONGO_PORT', 27017))
     MONGO_DATABASE = os.getenv('MONGO_DATABASE', 'finance_data')
-    MONGO_USERNAME = os.getenv('MONGO_USERNAME', 'admin')
-    MONGO_PASSWORD = os.getenv('MONGO_PASSWORD', 'devpassword123')
+    MONGO_USERNAME = os.getenv('MONGO_USERNAME', 'finance_user')
+    MONGO_PASSWORD = os.getenv('MONGO_PASSWORD', 'FinanceUserPass2024!')
     MONGO_AUTH_SOURCE = os.getenv('MONGO_AUTH_SOURCE', 'admin')
 
     PREDICTION_DAYS = int(os.getenv('PREDICTION_DAYS', '5'))

@@ -35,6 +35,7 @@ class Config:
     TRAINING_SCHEDULE = os.getenv('TRAINING_SCHEDULE', '02:00')
     PREDICTION_SCHEDULE = os.getenv('PREDICTION_SCHEDULE', '09:00')
     RETRAIN_INTERVAL_DAYS = int(os.getenv('RETRAIN_INTERVAL_DAYS', '7'))
+    RUN_DEMO_ON_START = os.getenv("RUN_DEMO_ON_START", "false").lower() == "true"
 
 class MLScheduler:
     
@@ -227,6 +228,7 @@ class MLScheduler:
         logger.info(f"Training scheduled at: {Config.TRAINING_SCHEDULE}")
         logger.info(f"Predictions scheduled at: {Config.PREDICTION_SCHEDULE}")
         logger.info(f"Retrain interval: {Config.RETRAIN_INTERVAL_DAYS} days")
+        logger.info(f"Demo mode: {Config.RUN_DEMO_ON_START}")
         
         # Schedule tasks
         schedule.every().day.at(Config.TRAINING_SCHEDULE).do(self.scheduled_training)
@@ -234,10 +236,23 @@ class MLScheduler:
         schedule.every().hour.do(self.model_performance_monitoring)
         
         # Run initial tasks
-        logger.info("Running initial training and prediction...")
-        self.scheduled_training()
-        time.sleep(10)  # Wait a bit between tasks
-        self.scheduled_prediction()
+        if Config.RUN_DEMO_ON_START:
+            logger.info("Demo mode enabled - running initial training and prediction...")
+            
+            # Wait a bit for data to be available from ETL
+            logger.info("Waiting for processed data to be available...")
+            time.sleep(60)  # Wait 1 minute for data
+            
+            self.scheduled_training()
+            time.sleep(30)  # Wait between tasks
+            self.scheduled_prediction()
+            
+            logger.info("Demo initialization completed.")
+        else:
+            logger.info("Running initial training and prediction...")
+            self.scheduled_training()
+            time.sleep(10)  # Wait a bit between tasks
+            self.scheduled_prediction()
         
         # Main scheduler loop
         while True:

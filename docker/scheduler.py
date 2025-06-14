@@ -27,6 +27,7 @@ class Config:
     
     CRAWLER_SCHEDULE = os.getenv("CRAWLER_SCHEDULE", "*/10 * * * *")
     ETL_SCHEDULE = os.getenv("ETL_SCHEDULE", "0 */12 * * *")
+    RUN_DEMO_ON_START = os.getenv("RUN_DEMO_ON_START", "false").lower() == "true"
     
     MAX_RUNTIME = {
         "crawler": 30 * 60,
@@ -153,10 +154,16 @@ def main() -> None:
     
     setup_schedule()
     
-    logger.info("Running initial jobs.")
-    run_crawler_job()
-    time.sleep(900)  # Wait 15 minutes before initial ETL
-    run_etl_job()
+    if Config.RUN_DEMO_ON_START:
+        logger.info("Demo mode enabled - running initial jobs for demo.")
+        run_crawler_job()
+        
+        # Wait for crawler to process data, then run ETL
+        logger.info("Waiting 5 minutes for crawler to process data...")
+        time.sleep(300)  # Wait 5 minutes instead of 15 for demo
+        run_etl_job()
+        
+        logger.info("Demo initialization completed.")
     
     logger.info("Entering main scheduling loop.")
     while True:

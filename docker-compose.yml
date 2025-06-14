@@ -319,10 +319,11 @@ services:
     networks:
       - finance_network
     depends_on:
-      - mongodb
-      - kafka-broker1
-      - kafka-broker2
-      - kafka-broker3
+      mongodb:
+        condition: service_healthy
+      kafka-topic-setup:
+        condition: service_completed_successfully
+    restart: "no"
 
   # Kafka Consumer Service
   kafka-consumer:
@@ -339,10 +340,10 @@ services:
     networks:
       - finance_network
     depends_on:
-      - kafka-broker1
-      - kafka-broker2
-      - kafka-broker3
-      - mongodb
+      mongodb:
+        condition: service_healthy
+      kafka-topic-setup:
+        condition: service_completed_successfully
 
   # ETL Service
   etl:
@@ -363,9 +364,15 @@ services:
     networks:
       - finance_network
     depends_on:
-      - spark-master
-      - spark-worker1
-      - mongodb
+      spark-master:
+        condition: service_started
+      spark-worker1:
+        condition: service_started
+      mongodb:
+        condition: service_healthy
+      crawler:
+        condition: service_completed_successfully
+    restart: "no"
 
   # Scheduler Service
   scheduler:
@@ -380,12 +387,19 @@ services:
       - ./configs:/app/configs
     env_file:
       - .env
+    environment:
+      - RUN_DEMO_ON_START=true
     networks:
       - finance_network
     depends_on:
-      - mongodb
-      - spark-master
-      - elasticsearch-master
+      mongodb:
+        condition: service_healthy
+      spark-master:
+        condition: service_started
+      elasticsearch-master:
+        condition: service_healthy
+      etl:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   # ML Training Service
@@ -401,11 +415,14 @@ services:
       - .env
     environment:
       - PYTHONPATH=/app
+      - RUN_DEMO_ON_START=true
     networks:
       - finance_network
     depends_on:
-      - mongodb
-      - etl
+      mongodb:
+        condition: service_healthy
+      etl:
+        condition: service_completed_successfully
     command: ["python", "ml_scheduler.py"]
     restart: unless-stopped
 
@@ -428,8 +445,10 @@ services:
     networks:
       - finance_network
     depends_on:
-      - mongodb
-      - ml-trainer
+      mongodb:
+        condition: service_healthy
+      ml-trainer:
+        condition: service_started
     command: ["python", "prediction_api.py"]
     restart: unless-stopped
 

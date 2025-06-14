@@ -40,6 +40,7 @@ last_run_times: Dict[str, Optional[datetime.datetime]] = {
 }
 
 def get_container_runtime(container: docker.models.containers.Container) -> float:
+    """
     Calculate how long a container has been running.
     """
     if container.status != 'running':

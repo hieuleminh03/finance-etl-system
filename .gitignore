@@ -1,12 +1,220 @@
+# Environment Variables
 /.env
+.env
+.env.local
+.env.*.local
 
-node_modules
-/.pnp
-.pnp.js
-/.pnp.cjs
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
 *.log
-*.tsbuildinfo
-*.tgz
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Logs
+logs/
+*.log
+app.log
+*.out
+
+# Data files
+data/
+*.csv
+*.json
+*.parquet
+*.xlsx
+*.xls
+raw_data/
+processed_data/
+backup_data/
+
+# ML Models
+models/
+*.pkl
+*.joblib
+*.h5
+*.model
+*.onnx
+
+# Jupyter notebooks (optional - uncomment if you don't want to track notebooks)
+# *.ipynb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.orig
+
+# Archives
 *.zip
+*.tar.gz
+*.rar
+*.7z
 *.tgz
+
+# Kafka data
+kafka-logs/
+zookeeper/
+
+# Elasticsearch data
+elasticsearch/
+elasticsearch-data/
+
+# MongoDB data
+mongo-data/
+mongodb/
+
+# Spark
+spark-warehouse/
+metastore_db/
+
+# Configuration files with sensitive data
+config/secrets.json
+config/local.json
+secrets/
+
+# Test artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Build artifacts
+build/
+dist/
+
+# Local development
+local/
+dev/

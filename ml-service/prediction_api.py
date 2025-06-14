@@ -29,8 +29,8 @@ class Config:
     MONGO_HOST = os.getenv('MONGO_HOST', 'mongodb')
     MONGO_PORT = int(os.getenv('MONGO_PORT', 27017))
     MONGO_DATABASE = os.getenv('MONGO_DATABASE', 'finance_data')
-    MONGO_USERNAME = os.getenv('MONGO_USERNAME', 'admin')
-    MONGO_PASSWORD = os.getenv('MONGO_PASSWORD', 'devpassword123')
+    MONGO_USERNAME = os.getenv('MONGO_USERNAME', 'finance_user')
+    MONGO_PASSWORD = os.getenv('MONGO_PASSWORD', 'FinanceUserPass2024!')
     MONGO_AUTH_SOURCE = os.getenv('MONGO_AUTH_SOURCE', 'admin')
     
     API_HOST = os.getenv('API_HOST', '0.0.0.0')
@@ -208,17 +208,12 @@ async def train_model_background(symbol: str) -> None:
     try:
         logger.info(f"Starting background training for {symbol}")
         
-        models = pipeline.train_models(symbol)
+        success = pipeline.train_models(symbol)
         
-        if models:
-            success = pipeline.save_models_to_mongodb(symbol, models)
-            
-            if success:
-                logger.info(f"Successfully trained and saved models for {symbol}")
-            else:
-                logger.error(f"Failed to save models for {symbol}")
+        if success:
+            logger.info(f"Successfully trained and saved models for {symbol}")
         else:
-            logger.warning(f"No models trained for {symbol}")
+            logger.warning(f"Failed to train models for {symbol}")
             
     except Exception as e:
         logger.error(f"Error in background training for {symbol}: {e}")

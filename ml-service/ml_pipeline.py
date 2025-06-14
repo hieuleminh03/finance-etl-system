@@ -63,7 +63,7 @@ class MLPipeline:
     
     def __init__(self) -> None:
         self.db = self._connect_to_mongodb()
-        self.fs = gridfs.GridFS(self.db) if self.db else None
+        self.fs = gridfs.GridFS(self.db) if self.db is not None else None
         self.models: Dict[str, Dict[str, Any]] = {}
         self.scalers: Dict[str, StandardScaler] = {}
         self.feature_columns: List[str] = []
@@ -104,7 +104,7 @@ class MLPipeline:
         }
     
     def load_processed_data(self, symbol: str) -> Optional[pd.DataFrame]:
-        if not self.db:
+        if self.db is None:
             logger.error("No MongoDB connection available.")
             return None
             
@@ -211,7 +211,7 @@ class MLPipeline:
         """
         Save trained models and scalers to MongoDB using GridFS.
         """
-        if not self.db or not self.fs or not self.models.get(symbol):
+        if self.db is None or self.fs is None or not self.models.get(symbol):
             logger.error("Cannot save models. No DB connection or no models trained.")
             return False
 
@@ -252,7 +252,7 @@ class MLPipeline:
         """
         Load a trained model and its corresponding scaler from MongoDB.
         """
-        if not self.db or not self.fs:
+        if self.db is None or self.fs is None:
             return None
             
         try:
@@ -280,7 +280,7 @@ class MLPipeline:
         """
         Get the best performing model for a symbol based on R² score.
         """
-        if not self.db:
+        if self.db is None:
             return None
             
         try:
@@ -336,7 +336,7 @@ class MLPipeline:
         """
         Save a prediction to MongoDB.
         """
-        if not self.db or not prediction:
+        if self.db is None or not prediction:
             return False
             
         try:
@@ -353,7 +353,7 @@ class MLPipeline:
         """
         Train models for a list of symbols.
         """
-        if not self.db:
+        if self.db is None:
             return
 
         if symbols is None:
@@ -363,21 +363,25 @@ class MLPipeline:
         for symbol in symbols:
             self.train_models(symbol)
 
-    def batch_predict(self, symbols: Optional[List[str]] = None) -> None:
+    def batch_predict(self, symbols: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """
         Make predictions for a list of symbols.
         """
-        if not self.db:
-            return
+        if self.db is None:
+            return []
 
         if symbols is None:
             symbols = self.db['ml_models'].distinct('symbol')
 
         logger.info(f"Starting batch prediction for {len(symbols)} symbols.")
+        predictions = []
         for symbol in symbols:
             prediction = self.predict_price(symbol)
             if prediction:
                 self.save_prediction_to_mongodb(prediction)
+                predictions.append(prediction)
+        
+        return predictions
 
 def main() -> None:
     """

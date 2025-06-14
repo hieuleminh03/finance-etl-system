@@ -15,8 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY ml-service/ /app/
 COPY .env /app/
 
-# Create logs directory
-RUN mkdir -p /app/logs
+# Create logs and data directories
+RUN mkdir -p /app/logs /app/data/models /app/data/processed_backup /app/data/raw
 
 # Set environment variables
 ENV PYTHONPATH=/app

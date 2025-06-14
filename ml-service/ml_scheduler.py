@@ -28,8 +28,8 @@ class Config:
     MONGO_HOST = os.getenv('MONGO_HOST', 'mongodb')
     MONGO_PORT = int(os.getenv('MONGO_PORT', 27017))
     MONGO_DATABASE = os.getenv('MONGO_DATABASE', 'finance_data')
-    MONGO_USERNAME = os.getenv('MONGO_USERNAME', 'admin')
-    MONGO_PASSWORD = os.getenv('MONGO_PASSWORD', 'devpassword123')
+    MONGO_USERNAME = os.getenv('MONGO_USERNAME', 'finance_user')
+    MONGO_PASSWORD = os.getenv('MONGO_PASSWORD', 'FinanceUserPass2024!')
     MONGO_AUTH_SOURCE = os.getenv('MONGO_AUTH_SOURCE', 'admin')
 
     TRAINING_SCHEDULE = os.getenv('TRAINING_SCHEDULE', '02:00')
@@ -43,7 +43,7 @@ class MLScheduler:
         self.db = self.pipeline.db
     
     def get_symbols_needing_training(self) -> List[str]:
-        if not self.db:
+        if self.db is None:
             return []
 
         symbols_to_train = []
@@ -64,7 +64,7 @@ class MLScheduler:
         return symbols_to_train
     
     def get_symbols_for_prediction(self) -> List[str]:
-        if not self.db:
+        if self.db is None:
             return []
             
         return self.db['ml_models'].distinct('symbol')
@@ -103,7 +103,10 @@ class MLScheduler:
             
             # Log summary of predictions
             for pred in predictions:
-                logger.info(f"Prediction: {pred['symbol']} ${pred['current_price']:.2f} → ${pred['predicted_price']:.2f} ({pred['price_change_pct']:+.2f}%)")
+                current_price = pred['current_price']
+                predicted_price = pred['predicted_price']
+                change_pct = ((predicted_price - current_price) / current_price) * 100
+                logger.info(f"Prediction: {pred['symbol']} ${current_price:.2f} → ${predicted_price:.2f} ({change_pct:+.2f}%)")
             
             # Update prediction log
             prediction_log = {
@@ -117,7 +120,7 @@ class MLScheduler:
             }
             
             # Save to MongoDB
-            if self.db:
+            if self.db is not None:
                 self.db['ml_prediction_logs'].insert_one(prediction_log)
             
         except Exception as e:

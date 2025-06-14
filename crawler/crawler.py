@@ -193,32 +193,64 @@ def process_symbols_parallel(symbols: List[str], producer: Producer) -> bool:
 def main() -> None:
     logger.info("Starting Financial Data Crawler")
     
+    # Check if we should run in continuous mode (for scheduler) or one-time mode (for initial ETL)
+    run_continuous = os.getenv('CRAWLER_CONTINUOUS_MODE', 'false').lower() == 'true'
+    
     producer = create_kafka_producer()
     
-    while True:
+    if run_continuous:
+        logger.info("Running in continuous mode")
+        while True:
+            try:
+                start_time = datetime.datetime.now()
+                logger.info(f"Starting data collection cycle at {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                symbols = load_stock_symbols()
+                if not symbols:
+                    logger.error("No stock symbols loaded, skipping cycle.")
+                    time.sleep(Config.FETCH_INTERVAL)
+                    continue
+
+                process_symbols_parallel(symbols, producer)
+                
+                end_time = datetime.datetime.now()
+                processing_time = (end_time - start_time).total_seconds()
+                logger.info(f"Completed data collection cycle in {processing_time:.2f} seconds.")
+                
+                wait_time = max(1, Config.FETCH_INTERVAL - processing_time)
+                logger.info(f"Waiting {wait_time:.2f} seconds before the next cycle.")
+                time.sleep(wait_time)
+                
+            except Exception as e:
+                logger.critical(f"Critical error in main loop: {e}", exc_info=True)
+                time.sleep(60)
+    else:
+        logger.info("Running in one-time mode")
         try:
             start_time = datetime.datetime.now()
-            logger.info(f"Starting data collection cycle at {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"Starting data collection at {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
             
             symbols = load_stock_symbols()
             if not symbols:
-                logger.error("No stock symbols loaded, skipping cycle.")
-                time.sleep(Config.FETCH_INTERVAL)
-                continue
+                logger.error("No stock symbols loaded, exiting.")
+                exit(1)
 
-            process_symbols_parallel(symbols, producer)
+            success = process_symbols_parallel(symbols, producer)
             
             end_time = datetime.datetime.now()
             processing_time = (end_time - start_time).total_seconds()
-            logger.info(f"Completed data collection cycle in {processing_time:.2f} seconds.")
+            logger.info(f"Completed data collection in {processing_time:.2f} seconds.")
             
-            wait_time = max(1, Config.FETCH_INTERVAL - processing_time)
-            logger.info(f"Waiting {wait_time:.2f} seconds before the next cycle.")
-            time.sleep(wait_time)
-            
+            if success:
+                logger.info("Crawler completed successfully")
+                exit(0)
+            else:
+                logger.error("Crawler completed with errors")
+                exit(1)
+                
         except Exception as e:
-            logger.critical(f"Critical error in main loop: {e}", exc_info=True)
-            time.sleep(60)
+            logger.critical(f"Critical error: {e}", exc_info=True)
+            exit(1)
 
 if __name__ == "__main__":
     main()

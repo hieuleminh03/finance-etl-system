@@ -305,7 +305,7 @@ services:
         condition: service_healthy
     restart: "no"
 
-  # Crawler Service
+  # Crawler Service (Initial Data Load)
   crawler:
     build:
       context: .
@@ -316,6 +316,8 @@ services:
       - ./configs:/app/configs
     env_file:
       - .env
+    environment:
+      - CRAWLER_CONTINUOUS_MODE=false  # Run once for initial data load
     networks:
       - finance_network
     depends_on:

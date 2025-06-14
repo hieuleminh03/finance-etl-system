@@ -91,11 +91,17 @@ def run_container(service_name: str) -> bool:
         except docker.errors.NotFound:
             pass  # Container not found, which is fine
 
+        # Set environment variables for the service
+        environment = {}
+        if service_name == "crawler":
+            environment["CRAWLER_CONTINUOUS_MODE"] = "true"  # Run in continuous mode when scheduled
+        
         new_container = client.containers.run(
             image_name,
             name=container_name,
             detach=True,
             network="finance_network",
+            environment=environment,
             volumes={
                 '/app/data': {'bind': '/app/data', 'mode': 'rw'},
                 '/app/logs': {'bind': '/app/logs', 'mode': 'rw'},
@@ -131,6 +137,51 @@ def run_crawler_job() -> None:
     logger.info("Executing crawler job.")
     run_container("crawler")
 
+def run_initial_crawler_job() -> None:
+    """Run the crawler job once for initial data load."""
+    logger.info("Executing initial crawler job (one-time mode).")
+    
+    container_name = "finance_crawler_initial"
+    image_name = "final-crawler:latest"
+    
+    try:
+        # Remove any existing initial crawler container
+        try:
+            container = client.containers.get(container_name)
+            container.stop()
+            container.remove()
+        except docker.errors.NotFound:
+            pass
+        
+        # Run crawler in one-time mode for initial data load
+        new_container = client.containers.run(
+            image_name,
+            name=container_name,
+            detach=True,
+            network="finance_network",
+            environment={"CRAWLER_CONTINUOUS_MODE": "false"},
+            volumes={
+                '/app/data': {'bind': '/app/data', 'mode': 'rw'},
+                '/app/logs': {'bind': '/app/logs', 'mode': 'rw'},
+                '/app/configs': {'bind': '/app/configs', 'mode': 'rw'}
+            }
+        )
+        
+        logger.info(f"Started initial crawler with container ID: {new_container.id[:12]}")
+        
+        # Wait for the container to complete
+        result = new_container.wait()
+        if result['StatusCode'] == 0:
+            logger.info("Initial crawler completed successfully")
+        else:
+            logger.error(f"Initial crawler failed with exit code: {result['StatusCode']}")
+        
+        # Clean up the container
+        new_container.remove()
+        
+    except Exception as e:
+        logger.error(f"Error running initial crawler: {e}")
+
 def run_etl_job() -> None:
     """Run the ETL job to process raw data."""
     logger.info("Executing ETL job.")
@@ -156,12 +207,10 @@ def main() -> None:
     
     if Config.RUN_DEMO_ON_START:
         logger.info("Demo mode enabled - running initial jobs for demo.")
-        run_crawler_job()
+        run_initial_crawler_job()
         
-        # Wait for crawler to process data, then run ETL
-        logger.info("Waiting 5 minutes for crawler to process data...")
-        time.sleep(300)  # Wait 5 minutes instead of 15 for demo
-        run_etl_job()
+        # ETL job will start automatically via docker-compose dependencies
+        logger.info("Initial crawler completed. ETL will start automatically.")
         
         logger.info("Demo initialization completed.")
     

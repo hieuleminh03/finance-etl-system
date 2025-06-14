@@ -1,0 +1,440 @@
+version: '3.8'
+
+services:
+
+  mongodb:
+    image: mongo:5.0
+    container_name: finance_mongodb
+    hostname: mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: admin
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - finance_network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo --quiet || exit 0
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  mongo-setup:
+    build:
+      context: .
+      dockerfile: ./mongo-setup/Dockerfile
+    container_name: finance_mongo_setup
+    hostname: mongo-setup
+    networks:
+      - finance_network
+    environment:
+      MONGO_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGODB_EXTRA_FLAGS: --quiet
+      MONGO_INITDB_DATABASE: admin
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: "no"
+    command: python3 /scripts/mongo_init.py
+  # Zookeeper Ensemble
+  zookeeper1:
+    image: confluentinc/cp-zookeeper:7.2.0
+    hostname: zookeeper1
+    container_name: finance_zookeeper1
+    ports:
+      - '2181:2181'
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_SERVERS: zookeeper1:2888:3888;zookeeper2:2888:3888;zookeeper3:2888:3888
+    networks:
+      - finance_network
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "echo stat | nc localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  zookeeper2:
+    image: confluentinc/cp-zookeeper:7.2.0
+    hostname: zookeeper2
+    container_name: finance_zookeeper2
+    ports:
+      - '2182:2181'
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SERVER_ID: 2
+      ZOOKEEPER_SERVERS: zookeeper1:2888:3888;zookeeper2:2888:3888;zookeeper3:2888:3888
+    networks:
+      - finance_network
+    restart: on-failure
+
+  zookeeper3:
+    image: confluentinc/cp-zookeeper:7.2.0
+    hostname: zookeeper3
+    container_name: finance_zookeeper3
+    ports:
+      - '2183:2181'
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SERVER_ID: 3
+      ZOOKEEPER_SERVERS: zookeeper1:2888:3888;zookeeper2:2888:3888;zookeeper3:2888:3888
+    networks:
+      - finance_network
+    restart: on-failure
+
+  # Kafka Broker 1
+  kafka-broker1:
+    image: confluentinc/cp-kafka:7.2.0
+    hostname: kafka-broker1
+    container_name: finance_kafka_broker1
+    depends_on:
+      - zookeeper1
+      - zookeeper2
+      - zookeeper3
+    ports:
+      - '9092:9092'
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper1:2181,zookeeper2:2181,zookeeper3:2181"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker1:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - finance_network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  kafka-broker2:
+    image: confluentinc/cp-kafka:7.2.0
+    hostname: kafka-broker2
+    container_name: finance_kafka_broker2
+    depends_on:
+      - zookeeper1
+      - zookeeper2
+      - zookeeper3
+    ports:
+      - '9093:9093'
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper1:2181,zookeeper2:2181,zookeeper3:2181"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker2:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+    networks:
+      - finance_network
+    restart: unless-stopped
+
+  kafka-broker3:
+    image: confluentinc/cp-kafka:7.2.0
+    hostname: kafka-broker3
+    container_name: finance_kafka_broker3
+    depends_on:
+      - zookeeper1
+      - zookeeper2
+      - zookeeper3
+    ports:
+      - '9094:9094'
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper1:2181,zookeeper2:2181,zookeeper3:2181"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker3:9094
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+    networks:
+      - finance_network
+    restart: unless-stopped
+
+  kafka-topic-setup:
+    build:
+      context: .
+      dockerfile: ./kafka-consumer/Dockerfile
+    container_name: finance_kafka_topic_setup
+    hostname: kafka-topic-setup
+    networks:
+      - finance_network
+    env_file:
+      - .env
+    command: ["python", "/app/setup_topics.py"]
+    depends_on:
+      kafka-broker1:
+        condition: service_healthy
+      kafka-broker2:
+        condition: service_started
+      kafka-broker3:
+        condition: service_started
+    restart: "no"
+
+  # Spark Master
+  spark-master:
+    build:
+      context: .
+      dockerfile: ./docker/spark.Dockerfile
+    container_name: finance_spark_master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_MASTER_PORT=7077
+      - SPARK_MASTER_WEBUI_PORT=8080
+      - SPARK_CONF_DIR=/spark/conf
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - finance_network
+    restart: unless-stopped
+
+  # Spark Worker 1
+  spark-worker1:
+    build:
+      context: .
+      dockerfile: ./docker/spark.Dockerfile
+    container_name: finance_spark_worker1
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2g
+      - SPARK_WORKER_WEBUI_PORT=8081
+      - SPARK_CONF_DIR=/spark/conf
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - finance_network
+    depends_on:
+      - spark-master
+    restart: unless-stopped
+
+  # Elasticsearch Cluster
+  elasticsearch-master:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.3.3
+    container_name: finance_elasticsearch_master # This service will now be the single ES node
+    environment:
+      - node.name=es-single-node                 # Node name for the single instance
+      - cluster.name=finance-es-cluster
+      - discovery.type=single-node             # Critical for single-node operation
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false             # Disable Elasticsearch security
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es_master_data:/usr/share/elasticsearch/data # This volume will store all data
+    ports:
+      - "9200:9200"                            # HTTP port
+      - "9300:9300"                            # Transport port
+    networks:
+      - finance_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -vq '\"status\":\"red\"'"] # Healthcheck without credentials
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # Kibana
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.3.3
+    container_name: finance_kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch-master:9200
+      # ELASTICSEARCH_USERNAME and ELASTICSEARCH_PASSWORD removed as security is disabled
+    ports:
+      - "${KIBANA_PORT}:5601"
+    networks:
+      - finance_network
+    depends_on:
+      elasticsearch-master:
+        condition: service_healthy
+    restart: unless-stopped
+
+  dashboard-importer:
+    build:
+      context: .
+      dockerfile: ./dashboards/Dockerfile
+    container_name: finance_dashboard_importer
+    hostname: dashboard-importer
+    networks:
+      - finance_network
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      kibana:
+        condition: service_started # The import script has its own wait logic for Kibana API
+      elasticsearch-master:
+        condition: service_healthy
+    restart: "no"
+
+  # Crawler Service
+  crawler:
+    build:
+      context: .
+      dockerfile: ./crawler/Dockerfile
+    container_name: finance_crawler
+    volumes:
+      - ./logs:/app/logs
+      - ./configs:/app/configs
+    env_file:
+      - .env
+    networks:
+      - finance_network
+    depends_on:
+      - mongodb
+      - kafka-broker1
+      - kafka-broker2
+      - kafka-broker3
+
+  # Kafka Consumer Service
+  kafka-consumer:
+    build:
+      context: .
+      dockerfile: ./kafka-consumer/Dockerfile
+    deploy:
+      replicas: 3
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    networks:
+      - finance_network
+    depends_on:
+      - kafka-broker1
+      - kafka-broker2
+      - kafka-broker3
+      - mongodb
+
+  # ETL Service
+  etl:
+    build:
+      context: .
+      dockerfile: ./spark-job/Dockerfile
+    container_name: finance_etl
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./configs:/app/configs
+    env_file:
+      - .env
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - HADOOP_CONF_DIR=/etc/hadoop/conf
+      - YARN_CONF_DIR=/etc/hadoop/conf
+    networks:
+      - finance_network
+    depends_on:
+      - spark-master
+      - spark-worker1
+      - mongodb
+
+  # Scheduler Service
+  scheduler:
+    build:
+      context: .
+      dockerfile: ./docker/scheduler.Dockerfile
+    container_name: finance_scheduler
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./configs:/app/configs
+    env_file:
+      - .env
+    networks:
+      - finance_network
+    depends_on:
+      - mongodb
+      - spark-master
+      - elasticsearch-master
+    restart: unless-stopped
+
+  # ML Training Service
+  ml-trainer:
+    build:
+      context: .
+      dockerfile: ./ml-service/Dockerfile
+    container_name: finance_ml_trainer
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+    networks:
+      - finance_network
+    depends_on:
+      - mongodb
+      - etl
+    command: ["python", "ml_scheduler.py"]
+    restart: unless-stopped
+
+  # ML Prediction API
+  ml-api:
+    build:
+      context: .
+      dockerfile: ./ml-service/Dockerfile
+    container_name: finance_ml_api
+    ports:
+      - "${ML_API_PORT:-8000}:8000"
+    volumes:
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+    networks:
+      - finance_network
+    depends_on:
+      - mongodb
+      - ml-trainer
+    command: ["python", "prediction_api.py"]
+    restart: unless-stopped
+
+networks:
+  finance_network:
+    name: ${NETWORK_NAME}
+
+volumes:
+  mongodb_data:
+  es_master_data:

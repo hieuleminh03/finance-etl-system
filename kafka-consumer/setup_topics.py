@@ -19,11 +19,27 @@ class Config:
     
     KAFKA_BOOTSTRAP_SERVERS = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka-broker1:9092')
     TOPICS = {
-        os.getenv('KAFKA_TOPIC', 'stock_ohlcv'): {
+        os.getenv('KAFKA_TOPIC_OHLCV', 'stock_ohlcv'): {
             "num_partitions": 3,
-            "replication_factor": 1,
+            "replication_factor": 3,
             "config": {
                 'retention.ms': str(7 * 24 * 60 * 60 * 1000),
+                'cleanup.policy': 'delete'
+            }
+        },
+        'financial_data': {
+            "num_partitions": 3,
+            "replication_factor": 3,
+            "config": {
+                'retention.ms': str(7 * 24 * 60 * 60 * 1000),
+                'cleanup.policy': 'delete'
+            }
+        },
+        'price_updates': {
+            "num_partitions": 3,
+            "replication_factor": 3,
+            "config": {
+                'retention.ms': str(24 * 60 * 60 * 1000),
                 'cleanup.policy': 'delete'
             }
         }

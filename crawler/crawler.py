@@ -17,8 +17,6 @@ from typing import Dict, Any, Optional, List
 
 from fetch_utils import (
     fetch_stock_history,
-    fetch_stock_actions,
-    fetch_stock_info,
     load_stock_symbols
 )
 
@@ -35,8 +33,6 @@ logger = logging.getLogger("crawler")
 class Config:
     KAFKA_BOOTSTRAP_SERVERS = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka-broker1:9092')
     KAFKA_TOPIC_OHLCV = os.getenv('KAFKA_TOPIC', 'stock_ohlcv')
-    KAFKA_TOPIC_ACTIONS = os.getenv('KAFKA_TOPIC_ACTIONS', 'stock_actions')
-    KAFKA_TOPIC_INFO = os.getenv('KAFKA_TOPIC_INFO', 'stock_info')
     FETCH_INTERVAL = int(os.getenv('FETCH_INTERVAL', '86400'))
     MAX_WORKERS = int(os.getenv('MAX_WORKERS', '10'))
     BACKOFF_MAX_TRIES = int(os.getenv('BACKOFF_MAX_TRIES', '5'))
@@ -140,83 +136,13 @@ def process_historical_data(symbol: str, producer: Producer) -> bool:
     logger.info(f"Sent {count} historical data records for {symbol}")
     return True
 
-def _create_actions_record(symbol: str, row: pd.Series) -> Optional[Dict[str, Any]]:
-    try:
-        date_str = format_date(row.get('date', row.name))
-        if not date_str:
-            date_str = datetime.date.today().strftime('%Y-%m-%d')
-
-        return {
-            'ticker': symbol,
-            'date': date_str,
-            'dividends': float(row.get('Dividends', 0.0)),
-            'stock_splits': float(row.get('Stock Splits', 0.0)),
-            'timestamp': datetime.datetime.now().isoformat()
-        }
-    except (KeyError, ValueError) as e:
-        logger.error(f"Error creating actions record for {symbol}: {e}")
-        return None
-
-def process_actions_data(symbol: str, producer: Producer) -> bool:
-    logger.info(f"Processing actions data for {symbol}")
-    
-    df = fetch_stock_actions(symbol)
-    if df is None or df.empty:
-        logger.info(f"No actions data available for {symbol}")
-        return False
-    
-    save_to_csv(df, symbol, 'actions')
-    
-    count = 0
-    for _, row in df.iterrows():
-        record = _create_actions_record(symbol, row)
-        if record:
-            json_value = json.dumps(record)
-            producer.produce(
-                topic=Config.KAFKA_TOPIC_ACTIONS,
-                key=symbol,
-                value=json_value,
-                callback=delivery_report
-            )
-            count += 1
-            
-    producer.flush()
-    logger.info(f"Sent {count} actions records for {symbol}")
-    return True
-
-def process_company_info(symbol: str, producer: Producer) -> bool:
-    logger.info(f"Processing company info for {symbol}")
-    
-    info = fetch_stock_info(symbol)
-    if info is None:
-        logger.info(f"No company info available for {symbol}")
-        return False
-    
-    save_to_csv(info, symbol, 'info')
-    
-    info['timestamp'] = datetime.datetime.now().isoformat()
-    
-    json_value = json.dumps(info, default=str)
-    producer.produce(
-        topic=Config.KAFKA_TOPIC_INFO,
-        key=symbol,
-        value=json_value,
-        callback=delivery_report
-    )
-    
-    producer.flush()
-    logger.info(f"Sent company info for {symbol}")
-    return True
 
 def process_symbol(symbol: str, producer: Producer) -> bool:
-    logger.info(f"Processing all data for {symbol}")
+    logger.info(f"Processing historical data for {symbol}")
     
     try:
-        # Chain data processing functions
-        process_historical_data(symbol, producer)
-        process_actions_data(symbol, producer)
-        process_company_info(symbol, producer)
-        return True
+        # Process only historical OHLCV data
+        return process_historical_data(symbol, producer)
     except Exception as e:
         logger.error(f"Error processing symbol {symbol}: {e}")
         return False

@@ -26,22 +26,6 @@ class Config:
                 'retention.ms': str(7 * 24 * 60 * 60 * 1000),
                 'cleanup.policy': 'delete'
             }
-        },
-        os.getenv('KAFKA_TOPIC_ACTIONS', 'stock_actions'): {
-            "num_partitions": 2,
-            "replication_factor": 1,
-            "config": {
-                'retention.ms': str(30 * 24 * 60 * 60 * 1000),
-                'cleanup.policy': 'delete'
-            }
-        },
-        os.getenv('KAFKA_TOPIC_INFO', 'stock_info'): {
-            "num_partitions": 1,
-            "replication_factor": 1,
-            "config": {
-                'retention.ms': str(90 * 24 * 60 * 60 * 1000),
-                'cleanup.policy': 'compact'
-            }
         }
     }
 

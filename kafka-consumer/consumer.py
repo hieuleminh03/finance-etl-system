@@ -11,7 +11,6 @@ import pytz
 from confluent_kafka import Consumer, KafkaError
 from dotenv import load_dotenv
 from collections import defaultdict
-from pymongo import UpdateOne
 from typing import Dict, Any, Optional, List
 
 # Setup logging
@@ -30,8 +29,6 @@ class Config:
 
     KAFKA_BOOTSTRAP_SERVERS = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka-broker1:9092')
     KAFKA_TOPIC_OHLCV = os.getenv('KAFKA_TOPIC_OHLCV', 'stock_ohlcv')
-    KAFKA_TOPIC_ACTIONS = os.getenv('KAFKA_TOPIC_ACTIONS', 'stock_actions')
-    KAFKA_TOPIC_INFO = os.getenv('KAFKA_TOPIC_INFO', 'stock_info')
     KAFKA_GROUP_ID = os.getenv('KAFKA_GROUP_ID', 'stock_consumer_group')
     KAFKA_AUTO_OFFSET_RESET = os.getenv('KAFKA_AUTO_OFFSET_RESET', 'earliest')
     
@@ -70,16 +67,14 @@ def create_kafka_consumer() -> Consumer:
         'enable.auto.commit': 'false'
     }
     consumer = Consumer(consumer_conf)
-    topics = [Config.KAFKA_TOPIC_OHLCV, Config.KAFKA_TOPIC_ACTIONS, Config.KAFKA_TOPIC_INFO]
+    topics = [Config.KAFKA_TOPIC_OHLCV]
     consumer.subscribe(topics)
     logger.info(f"Subscribed to Kafka topics: {', '.join(topics)}")
     return consumer
 
-def flush_batches_to_mongodb(
+def flush_ohlcv_to_mongodb(
     db: pymongo.database.Database,
-    ohlcv_batch: Dict[str, List],
-    actions_batch: Dict[str, List],
-    info_batch: List
+    ohlcv_batch: Dict[str, List]
 ) -> int:
     if db is None:
         logger.error("MongoDB connection not available.")
@@ -87,40 +82,22 @@ def flush_batches_to_mongodb(
 
     total_flushed = 0
     
-    def _flush_batch(batch: Dict, collection_prefix: str, collection_suffix: str = ""):
-        nonlocal total_flushed
-        for ticker, docs in batch.items():
-            if not docs:
-                continue
-            try:
-                collection = db[f'{collection_prefix}{ticker}{collection_suffix}']
-                collection.insert_many(docs, ordered=False)
-                logger.info(f"Flushed {len(docs)} records for {ticker} to {collection.name}.")
-                total_flushed += len(docs)
-            except Exception as e:
-                logger.error(f"Error flushing batch for {ticker} to {collection.name}: {e}")
-        batch.clear()
-
-    _flush_batch(ohlcv_batch, "stock_")
-    _flush_batch(actions_batch, "stock_", "_actions")
-
-    if info_batch:
+    for ticker, docs in ohlcv_batch.items():
+        if not docs:
+            continue
         try:
-            collection = db['company_info']
-            operations = [UpdateOne({'ticker': doc['ticker']}, {'$set': doc}, upsert=True) for doc in info_batch]
-            if operations:
-                result = collection.bulk_write(operations, ordered=False)
-                flushed_count = result.upserted_count + result.modified_count
-                logger.info(f"Flushed {flushed_count} info records.")
-                total_flushed += flushed_count
+            collection = db[f'stock_{ticker}']
+            collection.insert_many(docs, ordered=False)
+            logger.info(f"Flushed {len(docs)} OHLCV records for {ticker} to {collection.name}.")
+            total_flushed += len(docs)
         except Exception as e:
-            logger.error(f"Error flushing info batch: {e}")
-        info_batch.clear()
-
+            logger.error(f"Error flushing OHLCV batch for {ticker}: {e}")
+    
+    ohlcv_batch.clear()
     return total_flushed
 
 def main() -> None:
-    logger.info("Starting Kafka Consumer")
+    logger.info("Starting Kafka Consumer for OHLCV data")
 
     db = connect_to_mongodb()
     if not db:
@@ -130,9 +107,6 @@ def main() -> None:
     consumer = create_kafka_consumer()
     
     ohlcv_batch = defaultdict(list)
-    actions_batch = defaultdict(list)
-    info_batch = []
-    
     last_flush_time = datetime.datetime.now()
     
     try:
@@ -141,7 +115,7 @@ def main() -> None:
 
             if msg is None:
                 if (datetime.datetime.now() - last_flush_time).total_seconds() > Config.BATCH_MAX_SECONDS:
-                    if flush_batches_to_mongodb(db, ohlcv_batch, actions_batch, info_batch) > 0:
+                    if flush_ohlcv_to_mongodb(db, ohlcv_batch) > 0:
                         consumer.commit(asynchronous=False)
                     last_flush_time = datetime.datetime.now()
                 continue
@@ -163,17 +137,11 @@ def main() -> None:
                 topic = msg.topic()
                 if topic == Config.KAFKA_TOPIC_OHLCV:
                     ohlcv_batch[ticker].append(data)
-                elif topic == Config.KAFKA_TOPIC_ACTIONS:
-                    actions_batch[ticker].append(data)
-                elif topic == Config.KAFKA_TOPIC_INFO:
-                    info_batch.append(data)
 
-                batch_size = sum(len(v) for v in ohlcv_batch.values()) + \
-                             sum(len(v) for v in actions_batch.values()) + \
-                             len(info_batch)
+                batch_size = sum(len(v) for v in ohlcv_batch.values())
 
                 if batch_size >= Config.BATCH_SIZE:
-                    if flush_batches_to_mongodb(db, ohlcv_batch, actions_batch, info_batch) > 0:
+                    if flush_ohlcv_to_mongodb(db, ohlcv_batch) > 0:
                         consumer.commit(asynchronous=False)
                     last_flush_time = datetime.datetime.now()
 
@@ -183,7 +151,7 @@ def main() -> None:
     except KeyboardInterrupt:
         logger.info("Shutting down...")
     finally:
-        flush_batches_to_mongodb(db, ohlcv_batch, actions_batch, info_batch)
+        flush_ohlcv_to_mongodb(db, ohlcv_batch)
         consumer.close()
         logger.info("Consumer closed.")
 

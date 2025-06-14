@@ -1,17 +1,24 @@
 # Financial Data Pipeline + ML Price Prediction
 
-Real-time financial data processing with AI-powered stock price prediction.
+Real-time stock price data processing with AI-powered price prediction. Focused on OHLCV (Open, High, Low, Close, Volume) data only.
 
 ## Architecture
 
-**Data Flow:** Crawler → Kafka → MongoDB → Spark ETL → ML Models → API
+**Data Flow:** Crawler → Kafka (OHLCV only) → MongoDB → Spark ETL → ML Models → API
 
 **Services:**
 - MongoDB (data storage)
-- Kafka (streaming)
-- Spark (ETL processing) 
+- Kafka (streaming OHLCV data only)
+- Spark (ETL processing with technical indicators)
 - ML API (predictions on port 8000)
 - Kibana (visualization on port 5601)
+
+## Data Sources
+
+The system fetches **only stock historical OHLCV data** from Yahoo Finance:
+- Open, High, Low, Close prices
+- Volume data
+- No stock actions (dividends/splits) or company info
 
 ## Quick Start
 
